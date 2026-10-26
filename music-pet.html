@@ -1,0 +1,445 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>melo · your music pet</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh; display: flex;
+    align-items: center; justify-content: center;
+    background: #101018; font-family: system-ui, sans-serif;
+  }
+  /* the widget — copy this card + the script into any page */
+  .pet-card {
+    width: 300px; padding: 20px; text-align: center;
+    background: #1c1c2a; border-radius: 24px;
+    transition: background 1s;
+  }
+  .pet {
+    font-size: 60px; line-height: 1; cursor: pointer;
+    display: inline-block; transition: transform .12s ease;
+  }
+  .pet.beat { transform: scale(1.18); }
+  @keyframes pop {
+    0%   { transform: scale(.55); opacity: .2; }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  .pet.pop { animation: pop .5s ease; }
+  .mood  { margin-top: 8px; color: #9a9ab0; font-size: 13px; min-height: 16px; }
+  .taste { color: #66667a; font-size: 11px; margin-top: 2px; min-height: 14px; }
+  .track { color: #66667a; font-size: 11px; margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drop {
+    margin-top: 12px; padding: 10px; border-radius: 14px;
+    border: 2px dashed #3a3a4e; color: #8a8aa0; font-size: 12px;
+    cursor: pointer; transition: border-color .2s, color .2s;
+  }
+  .drop.over { border-color: #8b7bff; color: #fff; }
+  .chat {
+    margin-top: 14px; height: 170px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 6px;
+    text-align: left; padding: 4px 2px;
+  }
+  .msg {
+    max-width: 85%; padding: 7px 11px; border-radius: 14px;
+    font-size: 12.5px; line-height: 1.35; animation: msgin .25s ease;
+  }
+  @keyframes msgin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+  .msg.pet  { background: #2a2a3e; color: #e8e8f2; align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.user { background: #8b7bff; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.typing { color: #8a8aa0; font-style: italic; background: none; padding: 2px 4px; }
+  .chat-row { display: flex; gap: 6px; margin-top: 10px; }
+  .chat-row input {
+    flex: 1; background: #14141f; border: 1px solid #33334a;
+    border-radius: 12px; color: #fff; font-size: 12.5px;
+    padding: 8px 12px; outline: none; min-width: 0;
+  }
+  .chat-row input:focus { border-color: #8b7bff; }
+  .chat-row button {
+    background: #8b7bff; border: none; color: #fff;
+    border-radius: 12px; padding: 0 14px; cursor: pointer; font-size: 14px;
+  }
+  audio, input[type=file] { display: none; }
+</style>
+</head>
+<body>
+
+<div class="pet-card" id="card">
+  <div class="pet" id="pet" title="click to play / pause">🐣</div>
+  <div class="mood" id="mood">waiting for music…</div>
+  <div class="taste" id="taste">taste: ?</div>
+  <div class="track" id="track"></div>
+  <div class="drop" id="drop">🎵 drop music here, or click</div>
+  <div class="chat" id="chat"></div>
+  <div class="chat-row">
+    <input id="say" placeholder="talk to melo…" autocomplete="off">
+    <button id="send" title="send">➤</button>
+  </div>
+  <audio id="audio"></audio>
+  <input type="file" id="file" accept="audio/*">
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const pet = $('pet'), moodEl = $('mood'), tasteEl = $('taste'), trackEl = $('track');
+const dropEl = $('drop'), card = $('card'), audio = $('audio'), fileInput = $('file');
+const chat = $('chat'), sayInput = $('say');
+
+// ================= moods =================
+const MOODS = {
+  idle:     { face: '🐣', color: '#1c1c2a', label: 'waiting for music…' },
+  happy:    { face: '😊', color: '#3a2f14', label: 'happy!' },
+  excited:  { face: '🤩', color: '#3a1430', label: 'so excited!!' },
+  chill:    { face: '😌', color: '#123036', label: 'chilling' },
+  sad:      { face: '😢', color: '#14203a', label: 'feeling a bit sad…' },
+  sleepy:   { face: '😴', color: '#191628', label: 'so sleepy…' },
+};
+let mood = 'idle';
+
+function setMood(name) {
+  if (name === mood) return;
+  mood = name;
+  const m = MOODS[name];
+  pet.textContent = m.face;
+  moodEl.textContent = m.label;
+  card.style.background = m.color;
+  pet.classList.remove('pop');
+  void pet.offsetWidth; // restart the animation
+  pet.classList.add('pop');
+  maybeReact(now());
+}
+
+// ================= chat =================
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const now = () => performance.now();
+
+function addMsg(who, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+// pet "thinks" for a moment before speaking
+function petSay(text, delay = 800) {
+  const typing = addMsg('typing', 'melo is thinking…');
+  setTimeout(() => { typing.remove(); addMsg('pet', text); }, delay + Math.random() * 700);
+}
+
+// ================= personality =================
+const P = {
+  hello: "hi! i'm melo 🐣 drop a song on me and i'll tell you how i feel about it",
+  greeting: [
+    "oh! new song! i'm already curious 🎧",
+    "ooh, you dropped something! let me listen…",
+    "okay okay, playing it… i'm all ears (i only have ears, actually)",
+  ],
+  firstImpression: {
+    loud:   ["wow, this hits hard right away! i can feel the beat in my whole body",
+             "whoa — big energy from the start! i like that"],
+    bright: ["this is so bright! like sunshine in audio form",
+             "ahh, that's a warm, sparkly sound. i feel it"],
+    dark:   ["hmm, this one's moody. i like it — it's got depth",
+             "ooh, darker vibes. mysterious. i'm intrigued"],
+    soft:   ["soft start… i like a gentle opening. like being hugged",
+             "it's mellow so far… i'm settling in"],
+  },
+  questions: [
+    ["so… who made this song?", 'artist'],
+    ["when did you first hear it? what were you doing?", 'story'],
+    ["is this one of your favorites, or just a vibe?", 'favorite'],
+    ["what's the story behind this song? i want to know", 'story'],
+    ["what mood are you in today? i'm trying to learn your taste", 'mood'],
+  ],
+  answers: {
+    artist: ["oh, {name}! i'll remember that. they must mean something to you",
+             "i'll put {name} in my tiny brain 🧠",
+             "{name}, huh. that's a good name to feel to"],
+    artistNoName: ["okay, i'll remember that. they must mean something to you",
+                   "hmm, i'll keep that in my tiny brain 🧠"],
+    story:    ["…okay. i'm saving that in my tiny brain 🧠",
+               "that's a good story. songs need stories",
+               "ahh, now i understand it better. thank you"],
+    favorite: ["a true favorite! that explains everything",
+               "okay, favorites are sacred. i get it now"],
+    mood:     ["okay, noted! that helps me understand your taste",
+               "hmm, good to know. music and mood are best friends"],
+  },
+  reactions: {
+    excited: ["whoa!! this part is amazing", "my whole body is bouncing rn 🤩"],
+    happy:   ["this is making me so happy 🥹", "la la la~ i'm singing along"],
+    chill:   ["mm, just vibing with this", "smooth. so smooth"],
+    sad:     ["…this part's got a bit of ache to it, huh", "*quietly feels things*"],
+    sleepy:  ["it's getting mellow… i could nap to this", "zzz… just kidding. mostly"],
+  },
+  verdicts: {
+    fire: ["okay, my verdict: this is a 'windows down, top speed' song. no notes.",
+           "verdict: pure energy. this one's for when you need to move"],
+    edge: ["verdict: this one's got edge. feels like a late-night drive through the city",
+           "hmm… dark and driving. i'd play this with the lights off"],
+    cozy: ["verdict: cozy. this is a 'rainy afternoon with tea' song",
+           "soft and warm. this one's for doing absolutely nothing"],
+    deep: ["verdict: deep. this one's for staring out the window and thinking",
+           "quiet but full of something. i respect that"],
+  },
+  taste: {
+    excited: "you really like music that moves — big energy, big feelings. i respect it",
+    happy:   "your taste leans bright and warm. you're a good-vibes person, i can tell",
+    chill:   "you like mellow stuff. chill person. i'm a chill person too. we're the same",
+    sad:     "you like songs with ache in them. honestly? that's the most musical taste i know",
+    sleepy:  "you like quiet, soft stuff. gentle person. i like gentle people",
+  },
+  fallback: [
+    "hmm, tell me more? i'm a very good listener",
+    "i'm taking notes in my tiny journal 📓",
+    "okay but what part of the song do you like the most?",
+    "you know what, i like talking to you more than i expected",
+    "i don't fully understand, but i'm keeping it in my heart",
+  ],
+};
+
+// ================= memory / taste =================
+let pendingQ = null;          // question melo is waiting for an answer to
+let songStats = null;         // what melo is learning about the current song
+const songs = [];             // finished songs: {name, energy, bright, mood}
+let songTimers = [], lastReact = 0;
+
+function schedule(ms, fn) { songTimers.push(setTimeout(fn, ms)); }
+
+function finishSong() {
+  if (!songStats || songStats.n < 30) { songStats = null; return; }
+  const e = songStats.energy / songStats.n, b = songStats.bright / songStats.n;
+  const dom = Object.entries(songStats.moodTime).sort((a, c) => c[1] - a[1])[0][0];
+  songs.push({ name: songStats.name, energy: e, bright: b, mood: dom });
+  songStats = null;
+  updateTasteLine();
+  if (songs.length >= 2) petSay(tasteComment(), 1500);
+}
+
+function dominantMood() {
+  const counts = {};
+  songs.forEach(s => counts[s.mood] = (counts[s.mood] || 0) + 1);
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+function tasteComment() {
+  return `i've listened to ${songs.length} song${songs.length > 1 ? 's' : ''} from you now. ${P.taste[dominantMood()]}`;
+}
+function updateTasteLine() {
+  if (!songs.length) { tasteEl.textContent = 'taste: ?'; return; }
+  tasteEl.textContent = `taste: ${dominantMood()} · ${songs.length} song${songs.length > 1 ? 's' : ''} learned`;
+}
+
+function maybeReact(t) {
+  if (!audio.paused && songStats && t > lastReact + 10000 && Math.random() < 0.35) {
+    lastReact = t;
+    petSay(pick(P.reactions[mood]), 500);
+  }
+}
+
+// ================= file loading =================
+dropEl.onclick = () => fileInput.click();
+fileInput.onchange = () => fileInput.files[0] && load(fileInput.files[0]);
+
+['dragover', 'drop'].forEach(ev => dropEl.addEventListener(ev, e => {
+  e.preventDefault();
+  dropEl.classList.toggle('over', ev === 'dragover');
+  if (ev === 'drop' && e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);
+}));
+
+function load(file) {
+  if (!file.type.startsWith('audio/')) return;
+  finishSong();
+  songTimers.forEach(clearTimeout);
+  songTimers = [];
+  pendingQ = null;
+  audio.src = URL.createObjectURL(file);
+  trackEl.textContent = file.name;
+  sEnergy = sBright = 0;
+  candidate = null;
+  songStats = { energy: 0, bright: 0, n: 0, moodTime: {} };
+  audio.play();
+  petSay(pick(P.greeting), 400);
+  schedule(4000,  () => !audio.paused && songStats && firstImpression());
+  schedule(9000,  () => !audio.paused && songStats && askQuestion());
+  schedule(22000, () => !audio.paused && songStats && giveVerdict());
+}
+
+function firstImpression() {
+  if (sEnergy > 0.5)          petSay(pick(P.firstImpression.loud));
+  else if (sBright < 0.3)     petSay(pick(P.firstImpression.dark));
+  else if (sBright > 0.45)    petSay(pick(P.firstImpression.bright));
+  else                        petSay(pick(P.firstImpression.soft));
+}
+
+function askQuestion() {
+  const [text, type] = pick(P.questions);
+  pendingQ = { text, type };
+  petSay(text, 900);
+}
+
+function giveVerdict() {
+  const e = songStats.energy / songStats.n, b = songStats.bright / songStats.n;
+  const key = e > 0.45 ? (b > 0.4 ? 'fire' : 'edge') : (b > 0.4 ? 'cozy' : 'deep');
+  petSay(pick(P.verdicts[key]), 1000);
+}
+
+// click pet = play / pause
+pet.onclick = () => audio.paused ? audio.play() : audio.pause();
+
+audio.onended = () => {
+  finishSong();
+  petSay("that was it! …should i play it again? i'm a little bad at remembering songs, i'm afraid", 800);
+};
+
+// ================= audio analysis =================
+let ctx, analyser, freq, timeData, prevFreq, fluxHist = [];
+audio.onplay = () => {
+  if (!analyser) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    freq = new Float32Array(analyser.frequencyBinCount);
+    timeData = new Float32Array(analyser.fftSize);
+    prevFreq = new Float32Array(analyser.frequencyBinCount);
+    ctx.createMediaElementSource(audio).connect(analyser).connect(ctx.destination);
+  }
+  ctx.resume();
+};
+
+let lastBeat = 0;
+let sEnergy = 0, sBright = 0;      // smoothed features
+let candidate = null, since = 0;   // mood that has to "win" for a while
+
+function pickMood(t) {
+  let target;
+  if (sEnergy < 0.06)                    target = 'sleepy';
+  else if (sBright < 0.28 && sEnergy < 0.4) target = 'sad';
+  else if (sEnergy > 0.55)               target = 'excited';
+  else if (sBright > 0.45)               target = 'happy';
+  else                                   target = 'chill';
+
+  if (target !== candidate) { candidate = target; since = t; }
+  // only switch once the new mood has been the winner for ~1 second
+  if (t - since > 1000) setMood(target);
+}
+
+function analyse(t) {
+  analyser.getFloatFrequencyData(freq);
+  analyser.getFloatTimeDomainData(timeData);
+
+  // energy (loudness) from the waveform
+  let rms = 0;
+  for (let i = 0; i < timeData.length; i++) rms += timeData[i] * timeData[i];
+  const rawEnergy = Math.min(1, Math.sqrt(rms / timeData.length) / 0.12);
+
+  // brightness (spectral centroid) + flux for beat detection
+  let num = 0, den = 0, flux = 0;
+  for (let i = 0; i < freq.length; i++) {
+    const mag = Math.pow(10, freq[i] / 20);
+    num += i * mag;
+    den += mag;
+    flux += Math.max(0, mag - prevFreq[i]);
+    prevFreq[i] = mag;
+  }
+  const rawBright = den > 0 ? num / den / freq.length : 0;
+
+  // smooth the features over time so moods don't jitter
+  sEnergy += (rawEnergy - sEnergy) * 0.05;
+  sBright += (rawBright - sBright) * 0.05;
+
+  // remember what this song is like (for taste analysis)
+  if (songStats) {
+    songStats.energy += sEnergy;
+    songStats.bright += sBright;
+    songStats.n++;
+    songStats.moodTime[mood] = (songStats.moodTime[mood] || 0) + 1;
+  }
+
+  // simple beat detection: flux spike above its recent average
+  fluxHist.push(flux);
+  if (fluxHist.length > 45) fluxHist.shift();
+  const avg = fluxHist.reduce((a, b) => a + b, 0) / fluxHist.length;
+  if (flux > avg * 1.4 && t - lastBeat > 250) {
+    lastBeat = t;
+    pet.classList.add('beat');
+    setTimeout(() => pet.classList.remove('beat'), 120);
+  }
+
+  // pick a mood from the smoothed features
+  pickMood(t);
+}
+
+function loop(t) {
+  if (analyser && !audio.paused) analyse(t);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ================= talking back =================
+function handleUser(text) {
+  addMsg('user', text);
+  const t = text.toLowerCase().trim();
+
+  if (/who are you|your name|what are you/.test(t))
+    return petSay("i'm melo! your tiny music pet. i live in this little card and i feel everything you play 🎶", 900);
+
+  if (/taste|my music|what do you think of me/.test(t))
+    return petSay(songs.length ? tasteComment() : "i need more data! play me a few songs and i'll get to know you", 1200);
+
+  if (/^(hi|hey|hello|yo)\b/.test(t))
+    return petSay(pick(["hey! still vibing, by the way", "hi hi! i was just feeling the beat",
+                        "hey! i missed you (it's been five seconds)"]), 600);
+
+  if (/thank/.test(t))
+    return petSay("anytime! i live for this stuff 🎶", 600);
+
+  if (/\b(sad|miss|cry|lonely|tired)\b/.test(t))
+    return petSay("…i'm here. this song and i will keep you company. that's what i'm for", 1100);
+
+  if (/\b(love|great|amazing|perfect|good song)\b/.test(t))
+    return petSay("right?? i was just thinking the same thing", 700);
+
+  if (/\b(hate|boring|bad|annoying)\b/.test(t))
+    return petSay("oh no… i'll keep listening, but i'll admit, it's a tough one. what should we drop next?", 900);
+
+  // an answer to melo's pending question?
+  if (pendingQ) {
+    const q = pendingQ;
+    pendingQ = null;
+    if (q.type === 'artist') {
+      const m = text.match(/(?:by|made by|it's|its|from|the)\s+([A-Za-z][\w .'-]{1,30})/i);
+      if (m) {
+        const name = m[1].trim().replace(/[?.!]+$/, '');
+        return petSay(pick(P.answers.artist).replace('{name}', name), 1000);
+      }
+      return petSay(pick(P.answers.artistNoName), 900);
+    }
+    return petSay(pick(P.answers[q.type]), 900);
+  }
+
+  if (t.endsWith('?'))
+    return petSay(pick([
+      "hmm, good question. my honest answer: i like music that makes me feel something. and this one is making me feel " + mood,
+      "i think… yes? i'm a small creature with big opinions",
+      "you're asking a small blob these things, huh. i'll think about it",
+    ]), 1000);
+
+  petSay(pick(P.fallback), 800);
+}
+
+function submit() {
+  const v = sayInput.value.trim();
+  if (!v) return;
+  sayInput.value = '';
+  handleUser(v);
+}
+$('send').onclick = submit;
+sayInput.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+
+// say hello
+setTimeout(() => petSay(P.hello, 600), 400);
+</script>
+</body>
+</html>
