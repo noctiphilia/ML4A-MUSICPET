@@ -132,7 +132,7 @@ function petSay(text, delay = 800) {
 
 // ================= personality =================
 const P = {
-  hello: "hi! i'm melo 🥚 drop a song on me — i'll listen for 30 seconds and hatch into an animal based on your taste",
+  hello: "hi! i'm melo 🥚 drop a song on me — i'll listen to the whole thing and hatch into an animal based on your taste",
   greeting: [
     "oh! new song! i'm already curious 🎧",
     "ooh, you dropped something! let me listen…",
@@ -209,7 +209,7 @@ const P = {
 };
 
 // ================= evolution =================
-const HATCH_MS = 30000;       // melo only listens to the first 30 seconds
+// melo listens to the whole song, then hatches when it ends
 // 18 animals: energy (loud/mid/quiet) x brightness (bright/mid/dark) x tempo (fast/mid/slow)
 const ANIMALS = {
   dog:      { face: '🐕', name: 'a hyper dog',        taste: 'your taste is loud, bright, and fast — pure good-vibes person' },
@@ -254,7 +254,6 @@ let songStats = null;         // what melo is learning about the current song
 const songs = [];             // finished songs: {name, energy, bright, mood}
 let songTimers = [], lastReact = 0;
 let stage = 'egg';            // 'egg' while listening, 'hatched' after
-let listenMs = 0, lastT = 0;
 let animal = null;
 let beatInterval = 0;         // smoothed seconds between beats (for tempo)
 
@@ -330,7 +329,6 @@ function load(file) {
   candidate = null;
   songStats = { name: file.name, energy: 0, bright: 0, n: 0, moodTime: {}, beats: 0 };
   stage = 'egg';
-  listenMs = 0;
   animal = null;
   beatInterval = 0;
   pet.textContent = '🥚';
@@ -339,7 +337,8 @@ function load(file) {
   petSay(pick(P.greeting), 400);
   schedule(4000,  () => !audio.paused && songStats && firstImpression());
   schedule(9000,  () => !audio.paused && songStats && askQuestion());
-  schedule(20000, () => !audio.paused && songStats && petSay(pick(P.stillListening), 600));
+  schedule(25000, () => !audio.paused && songStats && petSay(pick(P.stillListening), 600));
+  schedule(45000, () => !audio.paused && songStats && petSay(pick(P.stillListening), 600));
 }
 
 function firstImpression() {
@@ -366,7 +365,7 @@ function giveVerdict() {
 pet.onclick = () => audio.paused ? audio.play() : audio.pause();
 
 audio.onended = () => {
-  if (stage === 'egg') hatch();   // short song: hatch with what we got
+  if (stage === 'egg') hatch();   // the song is over — time to evolve
   petSay("that was it! …should i play it again? i'm a little bad at remembering songs, i'm afraid", 800);
 };
 
@@ -457,15 +456,14 @@ function analyse(t) {
 
 function loop(t) {
   if (analyser && !audio.paused) {
-    const dt = lastT ? Math.min(100, t - lastT) : 16;
     if (stage === 'egg') {
-      listenMs += dt;   // only counts while the music is actually playing
-      tasteEl.textContent = `listening… ${Math.max(0, Math.ceil((HATCH_MS - listenMs) / 1000))}s`;
-      if (listenMs >= HATCH_MS) hatch();
+      // countdown to the end of the song (pausing pauses the clock for free)
+      const remain = isFinite(audio.duration)
+        ? Math.max(0, Math.ceil(audio.duration - audio.currentTime)) : null;
+      tasteEl.textContent = remain !== null ? `listening… ${remain}s left` : 'listening…';
     }
     analyse(t);
   }
-  lastT = t;
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
