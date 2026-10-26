@@ -6,3 +6,6 @@ Desktop.ini
 # editor / misc
 *.log
 .vscode/
+
+# local tooling config (contains private endpoint)
+opencode.json
