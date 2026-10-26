@@ -7,7 +7,10 @@ your taste.
 
 ## Run it
 
-Just open `music-pet.html` in any modern browser. No build step, no server, no dependencies.
+Just open `index.html` in any modern browser. No build step, no server, no dependencies.
+
+If deployed on GitHub Pages, the pet is the site itself — just visit your
+`github.io` URL.
 
 ## How it works
 
@@ -18,4 +21,4 @@ Just open `music-pet.html` in any modern browser. No build step, no server, no d
 
 ## Embed it
 
-Copy the `.pet-card` markup, its CSS, and the `<script>` block from `music-pet.html` into any page.
+Copy the `.pet-card` markup, its CSS, and the `<script>` block from `index.html` into any page.
