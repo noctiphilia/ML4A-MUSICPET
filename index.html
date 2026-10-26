@@ -26,6 +26,12 @@
     100% { transform: scale(1); }
   }
   .pet.pop { animation: pop .5s ease; }
+  @keyframes wobble {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+  }
+  .pet.egg.beat { transform: none; animation: wobble .3s ease; }
   .mood  { margin-top: 8px; color: #9a9ab0; font-size: 13px; min-height: 16px; }
   .taste { color: #66667a; font-size: 11px; margin-top: 2px; min-height: 14px; }
   .track { color: #66667a; font-size: 11px; margin-top: 2px;
@@ -66,7 +72,7 @@
 <body>
 
 <div class="pet-card" id="card">
-  <div class="pet" id="pet" title="click to play / pause">🐣</div>
+  <div class="pet egg" id="pet" title="click to play / pause">🥚</div>
   <div class="mood" id="mood">waiting for music…</div>
   <div class="taste" id="taste">taste: ?</div>
   <div class="track" id="track"></div>
@@ -88,12 +94,12 @@ const chat = $('chat'), sayInput = $('say');
 
 // ================= moods =================
 const MOODS = {
-  idle:     { face: '🐣', color: '#1c1c2a', label: 'waiting for music…' },
-  happy:    { face: '😊', color: '#3a2f14', label: 'happy!' },
-  excited:  { face: '🤩', color: '#3a1430', label: 'so excited!!' },
-  chill:    { face: '😌', color: '#123036', label: 'chilling' },
-  sad:      { face: '😢', color: '#14203a', label: 'feeling a bit sad…' },
-  sleepy:   { face: '😴', color: '#191628', label: 'so sleepy…' },
+  idle:     { color: '#1c1c2a', label: 'waiting for music…' },
+  happy:    { color: '#3a2f14', label: 'happy!' },
+  excited:  { color: '#3a1430', label: 'so excited!!' },
+  chill:    { color: '#123036', label: 'chilling' },
+  sad:      { color: '#14203a', label: 'feeling a bit sad…' },
+  sleepy:   { color: '#191628', label: 'so sleepy…' },
 };
 let mood = 'idle';
 
@@ -101,12 +107,8 @@ function setMood(name) {
   if (name === mood) return;
   mood = name;
   const m = MOODS[name];
-  pet.textContent = m.face;
   moodEl.textContent = m.label;
   card.style.background = m.color;
-  pet.classList.remove('pop');
-  void pet.offsetWidth; // restart the animation
-  pet.classList.add('pop');
   maybeReact(now());
 }
 
@@ -130,7 +132,7 @@ function petSay(text, delay = 800) {
 
 // ================= personality =================
 const P = {
-  hello: "hi! i'm melo 🐣 drop a song on me and i'll tell you how i feel about it",
+  hello: "hi! i'm melo 🥚 drop a song on me — i'll listen for 30 seconds and hatch into an animal based on your taste",
   greeting: [
     "oh! new song! i'm already curious 🎧",
     "ooh, you dropped something! let me listen…",
@@ -152,6 +154,12 @@ const P = {
     ["is this one of your favorites, or just a vibe?", 'favorite'],
     ["what's the story behind this song? i want to know", 'story'],
     ["what mood are you in today? i'm trying to learn your taste", 'mood'],
+  ],
+  stillListening: [
+    "still listening… this one's got layers to it",
+    "hmm, let me keep going. i'm almost ready to decide",
+    "i'm really taking this in. almost there",
+    "the more i listen, the more i like it",
   ],
   answers: {
     artist: ["oh, {name}! i'll remember that. they must mean something to you",
@@ -200,22 +208,84 @@ const P = {
   ],
 };
 
+// ================= evolution =================
+const HATCH_MS = 30000;       // melo only listens to the first 30 seconds
+// 18 animals: energy (loud/mid/quiet) x brightness (bright/mid/dark) x tempo (fast/mid/slow)
+const ANIMALS = {
+  dog:      { face: '🐕', name: 'a hyper dog',        taste: 'your taste is loud, bright, and fast — pure good-vibes person' },
+  bee:      { face: '🐝', name: 'a buzzing bee',      taste: 'you like bright, buzzing energy but smooth — like honey with a kick' },
+  wolf:     { face: '🐺', name: 'an intense wolf',    taste: 'you like loud music with edge — dark energy, late-night drive vibes' },
+  bat:      { face: '🦇', name: 'a heavy bat',        taste: 'you like heavy, dark, slow stuff — deep bass, low light' },
+  fox:      { face: '🦊', name: 'a lively fox',       taste: 'your taste is lively and sharp — playful, but with a bite' },
+  horse:    { face: '🐎', name: 'a steady horse',     taste: 'you like strong, steady energy — power without the chaos' },
+  cat:      { face: '🐱', name: 'a playful cat',      taste: 'your taste is warm and bright but easygoing — sunny afternoon energy' },
+  bird:     { face: '🐦', name: 'a cheerful bird',    taste: 'you like gentle, bright, singalong stuff — morning vibes' },
+  snake:    { face: '🐍', name: 'a smooth snake',     taste: 'you like smooth, sly, dark stuff — cool under pressure' },
+  fish:     { face: '🐟', name: 'a melancholy fish',  taste: 'you like quiet, dark, deep songs — the most musical taste i know' },
+  squirrel: { face: '🐿️', name: 'a busy squirrel',   taste: 'your taste is busy and curious — a little of everything, all at once' },
+  turtle:   { face: '🐢', name: 'a laid-back turtle', taste: 'you like mellow, warm stuff — chill person. i am a chill person too' },
+  chick:    { face: '🐥', name: 'a chirpy chick',     taste: 'you like soft but lively stuff — tiny energy, big heart' },
+  butterfly:{ face: '🦋', name: 'a gentle butterfly', taste: 'you like gentle, bright, floating stuff — dreamy person' },
+  owl:      { face: '🦉', name: 'a mysterious owl',   taste: 'you like dark, quiet, mysterious stuff — i respect it' },
+  sloth:    { face: '🦥', name: 'a sleepy sloth',     taste: 'you like soft, quiet, gentle stuff — gentle person. i like gentle people' },
+  mouse:    { face: '🐭', name: 'a twitchy mouse',    taste: 'you like quiet stuff with little quick sparks — subtle but alive' },
+  snail:    { face: '🐌', name: 'a slow snail',       taste: 'you like slow, soft, unhurried stuff — take your time, i do too' },
+};
+function animalFor(e, b, tempo) {
+  if (e > 0.5) {   // loud
+    if (b > 0.4)  return tempo === 'fast' ? 'dog' : 'bee';
+    if (b < 0.3)  return tempo === 'fast' ? 'wolf' : 'bat';
+    return tempo === 'fast' ? 'fox' : 'horse';
+  }
+  if (e < 0.18) {  // quiet
+    if (b > 0.4)  return tempo === 'fast' ? 'chick' : 'butterfly';
+    if (b < 0.3)  return tempo === 'fast' ? 'owl' : 'sloth';
+    return tempo === 'fast' ? 'mouse' : 'snail';
+  }
+  // mid energy
+  if (b > 0.4)  return tempo === 'fast' ? 'cat' : 'bird';
+  if (b < 0.3)  return tempo === 'fast' ? 'snake' : 'fish';
+  return tempo === 'fast' ? 'squirrel' : 'turtle';
+}
+
 // ================= memory / taste =================
 let pendingQ = null;          // question melo is waiting for an answer to
 let songStats = null;         // what melo is learning about the current song
 const songs = [];             // finished songs: {name, energy, bright, mood}
 let songTimers = [], lastReact = 0;
+let stage = 'egg';            // 'egg' while listening, 'hatched' after
+let listenMs = 0, lastT = 0;
+let animal = null;
+let beatInterval = 0;         // smoothed seconds between beats (for tempo)
 
 function schedule(ms, fn) { songTimers.push(setTimeout(fn, ms)); }
 
-function finishSong() {
-  if (!songStats || songStats.n < 30) { songStats = null; return; }
-  const e = songStats.energy / songStats.n, b = songStats.bright / songStats.n;
-  const dom = Object.entries(songStats.moodTime).sort((a, c) => c[1] - a[1])[0][0];
-  songs.push({ name: songStats.name, energy: e, bright: b, mood: dom });
+function tempoFor() {
+  if (!songStats || songStats.beats < 4 || !beatInterval) return 'mid';
+  const bpm = 60 / beatInterval;
+  return bpm >= 100 ? 'fast' : (bpm <= 85 ? 'slow' : 'mid');
+}
+
+function hatch() {
+  if (stage !== 'egg') return;
+  stage = 'hatched';
+  pet.classList.remove('egg');
+  const e = songStats ? songStats.energy / Math.max(1, songStats.n) : 0;
+  const b = songStats ? songStats.bright / Math.max(1, songStats.n) : 0;
+  const dom = songStats && Object.keys(songStats.moodTime).length
+    ? Object.entries(songStats.moodTime).sort((a, c) => c[1] - a[1])[0][0] : 'chill';
+  const tempo = tempoFor();   // must read songStats before it's cleared
+  songs.push({ name: songStats ? songStats.name : 'song', energy: e, bright: b, mood: dom });
   songStats = null;
+  animal = ANIMALS[animalFor(e, b, tempo)];
+  pet.textContent = animal.face;
+  pet.classList.remove('pop');
+  void pet.offsetWidth; // restart the animation
+  pet.classList.add('pop');
   updateTasteLine();
-  if (songs.length >= 2) petSay(tasteComment(), 1500);
+  petSay(`*crack* …i hatched! i'm ${animal.name}! ${animal.taste}`, 1200);
+  if (songs.length >= 2) schedule(6000, () => petSay(tasteComment(), 1500));
+  schedule(9000, () => !audio.paused && giveVerdict());
 }
 
 function dominantMood() {
@@ -227,6 +297,7 @@ function tasteComment() {
   return `i've listened to ${songs.length} song${songs.length > 1 ? 's' : ''} from you now. ${P.taste[dominantMood()]}`;
 }
 function updateTasteLine() {
+  if (stage === 'egg') return;    // the countdown owns this line while listening
   if (!songs.length) { tasteEl.textContent = 'taste: ?'; return; }
   tasteEl.textContent = `taste: ${dominantMood()} · ${songs.length} song${songs.length > 1 ? 's' : ''} learned`;
 }
@@ -250,7 +321,6 @@ fileInput.onchange = () => fileInput.files[0] && load(fileInput.files[0]);
 
 function load(file) {
   if (!file.type.startsWith('audio/')) return;
-  finishSong();
   songTimers.forEach(clearTimeout);
   songTimers = [];
   pendingQ = null;
@@ -258,12 +328,18 @@ function load(file) {
   trackEl.textContent = file.name;
   sEnergy = sBright = 0;
   candidate = null;
-  songStats = { energy: 0, bright: 0, n: 0, moodTime: {} };
+  songStats = { name: file.name, energy: 0, bright: 0, n: 0, moodTime: {}, beats: 0 };
+  stage = 'egg';
+  listenMs = 0;
+  animal = null;
+  beatInterval = 0;
+  pet.textContent = '🥚';
+  pet.classList.add('egg');
   audio.play();
   petSay(pick(P.greeting), 400);
   schedule(4000,  () => !audio.paused && songStats && firstImpression());
   schedule(9000,  () => !audio.paused && songStats && askQuestion());
-  schedule(22000, () => !audio.paused && songStats && giveVerdict());
+  schedule(20000, () => !audio.paused && songStats && petSay(pick(P.stillListening), 600));
 }
 
 function firstImpression() {
@@ -280,8 +356,9 @@ function askQuestion() {
 }
 
 function giveVerdict() {
-  const e = songStats.energy / songStats.n, b = songStats.bright / songStats.n;
-  const key = e > 0.45 ? (b > 0.4 ? 'fire' : 'edge') : (b > 0.4 ? 'cozy' : 'deep');
+  const s = songs[songs.length - 1];
+  if (!s) return;
+  const key = s.energy > 0.45 ? (s.bright > 0.4 ? 'fire' : 'edge') : (s.bright > 0.4 ? 'cozy' : 'deep');
   petSay(pick(P.verdicts[key]), 1000);
 }
 
@@ -289,7 +366,7 @@ function giveVerdict() {
 pet.onclick = () => audio.paused ? audio.play() : audio.pause();
 
 audio.onended = () => {
-  finishSong();
+  if (stage === 'egg') hatch();   // short song: hatch with what we got
   petSay("that was it! …should i play it again? i'm a little bad at remembering songs, i'm afraid", 800);
 };
 
@@ -362,9 +439,16 @@ function analyse(t) {
   if (fluxHist.length > 45) fluxHist.shift();
   const avg = fluxHist.reduce((a, b) => a + b, 0) / fluxHist.length;
   if (flux > avg * 1.4 && t - lastBeat > 250) {
+    if (lastBeat > 0) {
+      let iv = (t - lastBeat) / 1000;
+      while (iv < 0.35) iv *= 2;   // fold into a plausible beat range
+      while (iv > 1.0)  iv /= 2;
+      beatInterval = beatInterval ? beatInterval * 0.8 + iv * 0.2 : iv;
+    }
+    if (songStats) songStats.beats++;
     lastBeat = t;
     pet.classList.add('beat');
-    setTimeout(() => pet.classList.remove('beat'), 120);
+    setTimeout(() => pet.classList.remove('beat'), 300);
   }
 
   // pick a mood from the smoothed features
@@ -372,7 +456,16 @@ function analyse(t) {
 }
 
 function loop(t) {
-  if (analyser && !audio.paused) analyse(t);
+  if (analyser && !audio.paused) {
+    const dt = lastT ? Math.min(100, t - lastT) : 16;
+    if (stage === 'egg') {
+      listenMs += dt;   // only counts while the music is actually playing
+      tasteEl.textContent = `listening… ${Math.max(0, Math.ceil((HATCH_MS - listenMs) / 1000))}s`;
+      if (listenMs >= HATCH_MS) hatch();
+    }
+    analyse(t);
+  }
+  lastT = t;
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
